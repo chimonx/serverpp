@@ -11,9 +11,9 @@ const omise = require('omise')({
 
 const app = express();
 
-// ตั้งค่า CORS ให้อนุญาตเฉพาะ http://localhost:3002
+// ตั้งค่า CORS
 app.use(cors({
-  origin: 'http://localhost:3002',
+  origin: 'https://order.smobu.cloud',
   methods: ['GET', 'POST'],
   credentials: true,
 }));
