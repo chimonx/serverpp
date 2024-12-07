@@ -3,7 +3,7 @@
 const express = require('express');
 const { db, collection, updateDoc, query, where, doc, getDocs } = require('./firebase');
 const Omise = require('omise')({
-  publicKey: process.env.REACT_APP_PUBLIC_OMISE_KEY,
+  publicKey: process.env.REACT_APP_PUBLIC_OMISE_KEY, 
   secretKey: process.env.REACT_APP_SECRET_OMISE_KEY,
 });
 
