@@ -70,15 +70,6 @@ app.post('/checkout', async (req, res) => {
       return res.status(500).json({ error: 'Failed to retrieve QR Code URL' });
     }
 
-    // Save Order to Firebase
-    const newOrder = {
-      paymentChargeId: charge.id,
-      amount: charge.amount,
-      currency: charge.currency,
-      status: 'pending',
-      createdAt: new Date(),
-    };
-
     const docRef = await addDoc(collection(db, 'orders'), newOrder);
     console.log(`Order created with ID: ${docRef.id}`);
 
