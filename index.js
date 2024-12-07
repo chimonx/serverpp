@@ -1,18 +1,26 @@
-require('dotenv').config(); // โหลดค่าจากไฟล์ .env
+// server.js
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors'); // สำหรับจัดการ CORS
+const rateLimit = require('express-rate-limit');
+const webhookRoutes = require('./webhook'); // นำเข้า Webhook Routes
 const { db, collection, addDoc, updateDoc, query, where, doc, getDocs } = require('./firebase');
-
-// กำหนด Public และ Secret Key โดยดึงค่าจาก .env
-const omise = require('omise')({
+const Omise = require('omise')({
   publicKey: process.env.REACT_APP_PUBLIC_OMISE_KEY,
   secretKey: process.env.REACT_APP_SECRET_OMISE_KEY,
 });
 
 const app = express();
 
-// ตั้งค่า CORS
+// ตั้งค่า Rate Limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 นาที
+  max: 100, // จำกัดแต่ละ IP ไม่เกิน 100 ครั้งต่อหน้าต่างเวลา
+});
+app.use(limiter);
+
+// ตั้งค่า CORS ให้อนุญาตเฉพาะ https://order.smobu.cloud
 app.use(cors({
   origin: 'https://order.smobu.cloud',
   methods: ['GET', 'POST'],
@@ -21,6 +29,9 @@ app.use(cors({
 }));
 
 app.use(bodyParser.json());
+
+// ใช้ Webhook Routes
+app.use('/webhook', webhookRoutes);
 
 // สร้าง PromptPay QR Code
 app.post('/checkout', async (req, res) => {
@@ -32,7 +43,7 @@ app.post('/checkout', async (req, res) => {
 
   try {
     // สร้าง Source
-    const source = await omise.sources.create({
+    const source = await Omise.sources.create({
       type: 'promptpay',
       amount: amount,
       currency: 'THB',
@@ -41,7 +52,7 @@ app.post('/checkout', async (req, res) => {
     console.log('Source created:', source);
 
     // สร้าง Charge
-    const charge = await omise.charges.create({
+    const charge = await Omise.charges.create({
       amount: amount,
       source: source.id,
       currency: 'THB',
@@ -77,7 +88,7 @@ app.get('/payment-status/:chargeId', async (req, res) => {
   const chargeId = req.params.chargeId;
 
   try {
-    const charge = await omise.charges.retrieve(chargeId);
+    const charge = await Omise.charges.retrieve(chargeId);
 
     res.json({
       id: charge.id,
@@ -95,79 +106,8 @@ app.get('/payment-status/:chargeId', async (req, res) => {
   }
 });
 
-// ฟังก์ชันอัปเดตสถานะใน Firebase
-async function updateFirebaseStatus(chargeId, status, charge) {
-  const ordersQuery = query(
-    collection(db, 'orders'),
-    where('paymentChargeId', '==', chargeId)
-  );
-
-  const snapshot = await getDocs(ordersQuery);
-
-  if (!snapshot.empty) {
-    snapshot.forEach(async (docSnapshot) => {
-      const orderRef = doc(db, 'orders', docSnapshot.id);
-      await updateDoc(orderRef, {
-        status: status,
-        paymentDetails: {
-          chargeId: charge.id,
-          amount: charge.amount,
-          currency: charge.currency,
-          paid: charge.paid,
-        },
-      });
-
-      console.log(`Order ${docSnapshot.id} status updated to: ${status}`);
-    });
-  } else {
-    console.error('No orders found with the given chargeId:', chargeId);
-  }
-}
-
-// รับ Webhook จาก Omise
-app.post('/webhook', async (req, res) => {
-  const webhookData = req.body;
-
-  // ตรวจสอบว่า Webhook เป็นของจริง
-  if (!webhookData || !webhookData.object || webhookData.object !== 'event') {
-    console.error('Invalid webhook data:', webhookData);
-    return res.status(400).send('Invalid Webhook');
-  }
-
-  const eventType = webhookData.key;
-  console.log('Received webhook event:', eventType);
-
-  if (eventType === 'charge.complete') {
-    const charge = webhookData.data;
-    const chargeId = charge.id;
-
-    console.log(`Processing charge.complete for chargeId: ${chargeId}`);
-
-    // ตรวจสอบสถานะอีกครั้ง
-    try {
-      const chargeDetails = await omise.charges.retrieve(chargeId);
-
-      if (chargeDetails.status === 'successful') {
-        console.log(`Charge ${chargeId} verified as successful`);
-
-        // อัปเดตสถานะใน Firebase
-        await updateFirebaseStatus(chargeId, 'paid', chargeDetails);
-      } else {
-        console.log(`Charge ${chargeId} is not successful. Status: ${chargeDetails.status}`);
-      }
-
-      res.status(200).send('Webhook processed and Firebase updated');
-    } catch (error) {
-      console.error(`Error verifying charge ${chargeId} status:`, error);
-      res.status(500).send('Failed to process Webhook');
-    }
-  } else {
-    console.log(`Unhandled event type: ${eventType}`);
-    res.status(200).send('Webhook received');
-  }
-});
-
 // เริ่มเซิร์ฟเวอร์
-app.listen(5000, () => {
-  console.log('Server is running on port 5000');
+const PORT = 5000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
