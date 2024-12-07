@@ -5,8 +5,8 @@ const rateLimit = require('express-rate-limit');
 const { db, collection, addDoc } = require('./firebase');
 const webhookRoutes = require('./webhook'); // นำเข้า Webhook Routes
 const Omise = require('omise')({
-  publicKey: 'YOUR_PUBLIC_OMISE_KEY', // Replace with your Omise Public Key
-  secretKey: 'YOUR_SECRET_OMISE_KEY', // Replace with your Omise Secret Key
+  publicKey: process.env.REACT_APP_PUBLIC_OMISE_KEY, 
+  secretKey: process.env.REACT_APP_SECRET_OMISE_KEY,
 });
 
 const app = express();
