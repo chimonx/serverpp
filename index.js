@@ -1,4 +1,4 @@
-// index.js
+// server.js
 
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -7,8 +7,8 @@ const rateLimit = require('express-rate-limit');
 const webhookRoutes = require('./webhook'); // นำเข้า Webhook Routes
 const { db, collection, addDoc, updateDoc, query, where, doc, getDocs } = require('./firebase');
 const Omise = require('omise')({
-  publicKey: 'pkey_test_5vtenkt0w8cggb5t33q',
-  secretKey: 'skey_test_5vtenkvhlas6pps21rz',
+  publicKey: process.env.REACT_APP_PUBLIC_OMISE_KEY,
+  secretKey: process.env.REACT_APP_SECRET_OMISE_KEY,
 });
 
 const app = express();
@@ -109,5 +109,5 @@ app.get('/payment-status/:chargeId', async (req, res) => {
 // เริ่มเซิร์ฟเวอร์
 const PORT = 5000;
 app.listen(PORT, () => {
-  console.log('Server is running on port 5000');
+  console.log(`Server is running on port ${PORT}`);
 });
