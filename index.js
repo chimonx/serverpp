@@ -1,7 +1,7 @@
 require('dotenv').config(); // โหลดค่าจากไฟล์ .env
 const express = require('express');
-const cors = require('cors');
 const bodyParser = require('body-parser');
+const db = require('./firebase'); // นำเข้า Firebase SDK
 
 // กำหนด Public และ Secret Key โดยดึงค่าจาก .env
 const omise = require('omise')({
@@ -10,13 +10,6 @@ const omise = require('omise')({
 });
 
 const app = express();
-
-// ตั้งค่า CORS ให้อนุญาตเฉพาะ http://localhost:3002
-app.use(cors({
-  origin: 'https://order.smobu.cloud',
-  methods: ['GET', 'POST'],
-  credentials: true,
-}));
 
 app.use(bodyParser.json());
 
@@ -37,12 +30,28 @@ app.post('/checkout', (req, res) => {
         amount: amount,
         source: source.id,
         currency: 'THB',
-      }, (error, charge) => {
+      }, async (error, charge) => {
         if (error) {
           console.error('Error creating charge:', error);
           res.status(400).send(error);
         } else {
-          res.send(charge);
+          // บันทึก Charge ID ลงใน Firebase
+          const newOrder = {
+            paymentChargeId: charge.id,
+            amount: charge.amount,
+            currency: charge.currency,
+            status: 'pending',
+            createdAt: new Date(),
+          };
+
+          try {
+            const docRef = await db.collection('orders').add(newOrder);
+            console.log(`Order created with ID: ${docRef.id}`);
+            res.send({ charge, orderId: docRef.id });
+          } catch (firebaseError) {
+            console.error('Error saving order to Firebase:', firebaseError);
+            res.status(500).send(firebaseError);
+          }
         }
       });
     }
@@ -50,10 +59,10 @@ app.post('/checkout', (req, res) => {
 });
 
 // ตรวจสอบสถานะการชำระเงิน
-app.get('/payment-status/:chargeId', (req, res) => {
+app.get('/payment-status/:chargeId', async (req, res) => {
   const chargeId = req.params.chargeId;
 
-  omise.charges.retrieve(chargeId, (error, charge) => {
+  omise.charges.retrieve(chargeId, async (error, charge) => {
     if (error) {
       console.error('Error retrieving charge:', error);
       res.status(400).send(error);
@@ -66,8 +75,62 @@ app.get('/payment-status/:chargeId', (req, res) => {
         currency: charge.currency,
         source: charge.source,
       });
+
+      // หากสถานะสำเร็จ (successful) อัปเดต Firebase
+      if (charge.status === 'successful') {
+        await updateFirebaseStatus(charge.id, 'paid', charge);
+      }
     }
   });
+});
+
+// ฟังก์ชันอัปเดตสถานะใน Firebase
+async function updateFirebaseStatus(chargeId, status, charge) {
+  const ordersRef = db.collection('orders');
+  const snapshot = await ordersRef.where('paymentChargeId', '==', chargeId).get();
+
+  if (!snapshot.empty) {
+    snapshot.forEach(async (doc) => {
+      await doc.ref.update({
+        status: status,
+        paymentDetails: {
+          chargeId: charge.id,
+          amount: charge.amount,
+          currency: charge.currency,
+          paid: charge.paid,
+        },
+      });
+
+      console.log(`Order ${doc.id} status updated to: ${status}`);
+    });
+  } else {
+    console.error('No orders found with the given chargeId:', chargeId);
+  }
+}
+
+// รับ Webhook จาก Omise (ไม่ใช้ CORS)
+app.post('/webhook', bodyParser.json(), (req, res) => {
+  const webhookData = req.body;
+
+  // ตรวจสอบว่า Webhook เป็นของจริง
+  if (!webhookData || !webhookData.object || webhookData.object !== 'event') {
+    console.error('Invalid webhook data:', webhookData);
+    return res.status(400).send('Invalid Webhook');
+  }
+
+  // ตรวจสอบประเภทของ Event
+  const eventType = webhookData.key;
+  console.log('Received webhook event:', eventType);
+
+  if (eventType === 'charge.complete') {
+    const charge = webhookData.data;
+    const chargeId = charge.id;
+
+    // เรียก /payment-status/:chargeId เพื่อตรวจสอบสถานะ
+    console.log(`Processing charge.complete for chargeId: ${chargeId}`);
+  }
+
+  res.status(200).send('Webhook received and processed');
 });
 
 // เริ่มเซิร์ฟเวอร์
