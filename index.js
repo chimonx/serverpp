@@ -3,10 +3,9 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { db, collection, addDoc } = require('./firebase');
-const webhookRoutes = require('./webhook'); // นำเข้า Webhook Routes
-app.use('/webhook', webhookRoutes); // ตั้งค่าเส้นทาง Webhook
+const webhookRoutes = require('./webhook');
 const Omise = require('omise')({
-  publicKey: process.env.REACT_APP_PUBLIC_OMISE_KEY, 
+  publicKey: process.env.REACT_APP_PUBLIC_OMISE_KEY,
   secretKey: process.env.REACT_APP_SECRET_OMISE_KEY,
 });
 
@@ -28,6 +27,10 @@ app.use(cors({
 }));
 
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true })); // For x-www-form-urlencoded
+
+// Use webhook route
+app.use('/webhook', webhookRoutes);
 
 // Endpoint: Checkout
 app.post('/checkout', async (req, res) => {
@@ -58,8 +61,8 @@ app.post('/checkout', async (req, res) => {
 
     // Retrieve QR Code URL
     const qrCodeUrl =
-      charge.source?.scannable_code?.image?.download_uri || // From Charge
-      source?.scannable_code?.image?.download_uri ||        // From Source
+      charge.source?.scannable_code?.image?.download_uri || 
+      source?.scannable_code?.image?.download_uri || 
       null;
 
     if (!qrCodeUrl) {
