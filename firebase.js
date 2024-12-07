@@ -1,5 +1,5 @@
-const firebase = require('firebase/app');
-require('firebase/firestore'); // นำเข้า Firestore
+const { initializeApp } = require('firebase/app');
+const { getFirestore, collection, getDocs } = require('firebase/firestore');
 
 // โหลดค่าคอนฟิกจาก Environment Variables
 const firebaseConfig = {
@@ -13,27 +13,22 @@ const firebaseConfig = {
 };
 
 // ตรวจสอบว่า Firebase ถูก initialize หรือยัง
-try {
-  if (!firebase.apps || !firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-    console.log("Firebase initialized successfully");
-  }
-} catch (error) {
-  console.error("Firebase initialization error:", error);
-}
+const app = initializeApp(firebaseConfig);
+console.log("Firebase initialized successfully");
 
 // ทดสอบการเชื่อมต่อกับ Firestore
-const db = firebase.firestore();
+const db = getFirestore(app);
 
-db.collection("test")
-  .get()
-  .then((snapshot) => {
+(async () => {
+  try {
+    const testCollection = collection(db, "test");
+    const snapshot = await getDocs(testCollection);
     console.log(
       `Connected to Firestore successfully. Found ${snapshot.size} documents in the 'test' collection.`
     );
-  })
-  .catch((error) => {
+  } catch (error) {
     console.error("Error connecting to Firestore:", error);
-  });
+  }
+})();
 
 module.exports = db;
