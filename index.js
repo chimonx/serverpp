@@ -2,6 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
+const webhookRoutes = require('./webhook');
 const Omise = require('omise')({
   publicKey: process.env.REACT_APP_PUBLIC_OMISE_KEY,
   secretKey: process.env.REACT_APP_SECRET_OMISE_KEY,
@@ -26,6 +27,9 @@ app.use(cors({
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true })); // For x-www-form-urlencoded
+
+// Use webhook route
+app.use('/webhook', webhookRoutes);
 
 // Endpoint: Checkout
 app.post('/checkout', async (req, res) => {
