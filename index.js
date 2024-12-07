@@ -1,7 +1,7 @@
 require('dotenv').config(); // โหลดค่าจากไฟล์ .env
 const express = require('express');
 const bodyParser = require('body-parser');
-const cors = require('cors'); // นำเข้า CORS
+const cors = require('cors'); // สำหรับจัดการ CORS
 const { db, collection, addDoc, updateDoc, query, where, doc, getDocs } = require('./firebase');
 
 // กำหนด Public และ Secret Key โดยดึงค่าจาก .env
@@ -12,7 +12,7 @@ const omise = require('omise')({
 
 const app = express();
 
-// ตั้งค่า CORS ให้อนุญาตเฉพาะ https://order.smobu.cloud
+// ตั้งค่า CORS
 app.use(cors({
   origin: 'https://order.smobu.cloud',
   methods: ['GET', 'POST'],
@@ -79,10 +79,7 @@ app.get('/payment-status/:chargeId', async (req, res) => {
       source: charge.source,
     });
 
-    // หากสถานะสำเร็จ (successful) อัปเดต Firebase
-    if (charge.status === 'successful') {
-      await updateFirebaseStatus(charge.id, 'paid', charge);
-    }
+    console.log(`Charge ${chargeId} retrieved successfully`);
   } catch (error) {
     console.error('Error retrieving charge:', error);
     res.status(500).send({ error: 'Failed to retrieve charge' });
@@ -137,15 +134,28 @@ app.post('/webhook', async (req, res) => {
 
     console.log(`Processing charge.complete for chargeId: ${chargeId}`);
 
-    // ตรวจสอบสถานะและอัปเดต Firebase
-    if (charge.status === 'successful') {
-      await updateFirebaseStatus(chargeId, 'paid', charge);
-    } else {
-      console.log(`Charge ${chargeId} is not successful. Current status: ${charge.status}`);
-    }
-  }
+    // เรียก /payment-status/:chargeId ก่อนอัปเดต Firebase
+    try {
+      const chargeDetails = await omise.charges.retrieve(chargeId);
 
-  res.status(200).send('Webhook received and processed');
+      if (chargeDetails.status === 'successful') {
+        console.log(`Charge ${chargeId} verified as successful`);
+
+        // อัปเดตสถานะใน Firebase
+        await updateFirebaseStatus(chargeId, 'paid', chargeDetails);
+      } else {
+        console.log(`Charge ${chargeId} is not successful. Status: ${chargeDetails.status}`);
+      }
+
+      res.status(200).send('Webhook processed and Firebase updated');
+    } catch (error) {
+      console.error(`Error verifying charge ${chargeId} status:`, error);
+      res.status(500).send('Failed to process Webhook');
+    }
+  } else {
+    console.log(`Unhandled event type: ${eventType}`);
+    res.status(200).send('Webhook received');
+  }
 });
 
 // เริ่มเซิร์ฟเวอร์
