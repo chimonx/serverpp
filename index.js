@@ -22,10 +22,10 @@ app.use(limiter);
 
 // ตั้งค่า CORS ให้อนุญาตเฉพาะ https://order.smobu.cloud
 app.use(cors({
-  origin: ['https://order.smobu.cloud', 'https://payment.smobu.cloud'],
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
-  credentials: true,
+  origin: 'https://order.smobu.cloud', // อนุญาตเฉพาะโดเมนของคุณ
+  methods: ['GET', 'POST', 'OPTIONS'], // อนุญาตเฉพาะ Methods ที่ต้องการ
+  allowedHeaders: ['Content-Type'], // อนุญาตเฉพาะ Headers ที่จำเป็น
+  credentials: true, // อนุญาตการส่ง Cookies หรือ Credentials
 }));
 
 
