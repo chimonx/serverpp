@@ -4,6 +4,7 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { db, collection, addDoc } = require('./firebase');
 const webhookRoutes = require('./webhook'); // นำเข้า Webhook Routes
+app.use('/webhook', webhookRoutes); // ตั้งค่าเส้นทาง Webhook
 const Omise = require('omise')({
   publicKey: process.env.REACT_APP_PUBLIC_OMISE_KEY, 
   secretKey: process.env.REACT_APP_SECRET_OMISE_KEY,
