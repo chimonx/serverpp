@@ -7,7 +7,7 @@ const rateLimit = require('express-rate-limit');
 const webhookRoutes = require('./webhook'); // นำเข้า Webhook Routes
 const { db, collection, addDoc, updateDoc, query, where, doc, getDocs } = require('./firebase');
 const Omise = require('omise')({
-  publicKey: process.env.REACT_APP_PUBLIC_OMISE_KEY,
+  publicKey: process.env.REACT_APP_PUBLIC_OMISE_KEY, 
   secretKey: process.env.REACT_APP_SECRET_OMISE_KEY,
 });
 
@@ -60,8 +60,13 @@ app.post('/checkout', async (req, res) => {
 
     console.log('Charge created:', charge);
 
-    // ดึง URL ของ QR Code
-    const qrCodeUrl = charge.source?.scannable_code?.image?.download_uri || null;
+    // ดึง URL ของ QR Code จาก Source แทน Charge
+    const qrCodeUrl = source.scannable_code?.image?.download_uri || null;
+
+    if (!qrCodeUrl) {
+      console.error('QR Code URL not found in source.');
+      return res.status(500).json({ error: 'Failed to retrieve QR Code URL' });
+    }
 
     // บันทึก Charge ลง Firebase
     const newOrder = {
