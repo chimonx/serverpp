@@ -3,8 +3,8 @@
 const express = require('express');
 const { db, collection, updateDoc, query, where, doc, getDocs } = require('./firebase');
 const Omise = require('omise')({
-   publicKey: process.env.REACT_APP_PUBLIC_OMISE_KEY,
-   secretKey: process.env.REACT_APP_SECRET_OMISE_KEY,
+  publicKey: process.env.REACT_APP_PUBLIC_OMISE_KEY,
+  secretKey: process.env.REACT_APP_SECRET_OMISE_KEY,
 });
 
 const router = express.Router();
@@ -75,6 +75,16 @@ router.post('/', async (req, res) => {
       console.error(`Error verifying charge ${chargeId} status:`, error);
       res.status(500).send('Failed to process Webhook');
     }
+  } else if (eventType === 'charge.create') {
+    const charge = webhookData.data;
+    const chargeId = charge.id;
+
+    console.log(`Processing charge.create for chargeId: ${chargeId}`);
+
+    // คุณสามารถเพิ่มการจัดการเพิ่มเติมได้ที่นี่ หากจำเป็น
+    // เช่น การบันทึกข้อมูลเพิ่มเติมหรือการแจ้งเตือน
+
+    res.status(200).send('Webhook processed');
   } else {
     console.log(`Unhandled event type: ${eventType}`);
     res.status(200).send('Webhook received');
