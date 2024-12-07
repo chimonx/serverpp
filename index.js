@@ -1,8 +1,7 @@
 require('dotenv').config(); // โหลดค่าจากไฟล์ .env
 const express = require('express');
 const bodyParser = require('body-parser');
-const db = require('./firebase'); // นำเข้า Firebase SDK
-const { collection, query, where, getDocs, updateDoc, doc, addDoc } = require('firebase/firestore');
+const { db, collection, addDoc, updateDoc, query, where, doc, getDocs } = require('./firebase');
 
 // กำหนด Public และ Secret Key โดยดึงค่าจาก .env
 const omise = require('omise')({
@@ -11,7 +10,6 @@ const omise = require('omise')({
 });
 
 const app = express();
-
 app.use(bodyParser.json());
 
 // สร้าง PromptPay QR Code
@@ -23,19 +21,21 @@ app.post('/checkout', async (req, res) => {
   }
 
   try {
+    // สร้าง Source
     const source = await omise.sources.create({
       type: 'promptpay',
       amount: amount,
       currency: 'THB',
     });
 
+    // สร้าง Charge
     const charge = await omise.charges.create({
       amount: amount,
       source: source.id,
       currency: 'THB',
     });
 
-    // บันทึก Charge ID ลงใน Firebase
+    // บันทึก Charge ลง Firebase
     const newOrder = {
       paymentChargeId: charge.id,
       amount: charge.amount,
@@ -109,7 +109,7 @@ async function updateFirebaseStatus(chargeId, status, charge) {
   }
 }
 
-// รับ Webhook จาก Omise (ไม่ใช้ CORS)
+// รับ Webhook จาก Omise
 app.post('/webhook', async (req, res) => {
   const webhookData = req.body;
 
@@ -119,7 +119,6 @@ app.post('/webhook', async (req, res) => {
     return res.status(400).send('Invalid Webhook');
   }
 
-  // ตรวจสอบประเภทของ Event
   const eventType = webhookData.key;
   console.log('Received webhook event:', eventType);
 
