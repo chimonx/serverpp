@@ -17,6 +17,7 @@ app.use(cors({
   origin: 'https://order.smobu.cloud',
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type'],
+  credentials: true,
 }));
 
 app.use(bodyParser.json());
@@ -26,7 +27,7 @@ app.post('/checkout', async (req, res) => {
   const { amount } = req.body;
 
   if (!amount || amount <= 0) {
-    return res.status(400).send({ error: 'Invalid amount' });
+    return res.status(400).json({ error: 'Invalid amount' });
   }
 
   try {
@@ -37,12 +38,19 @@ app.post('/checkout', async (req, res) => {
       currency: 'THB',
     });
 
+    console.log('Source created:', source);
+
     // สร้าง Charge
     const charge = await omise.charges.create({
       amount: amount,
       source: source.id,
       currency: 'THB',
     });
+
+    console.log('Charge created:', charge);
+
+    // ดึง URL ของ QR Code
+    const qrCodeUrl = charge.source?.scannable_code?.image?.download_uri || null;
 
     // บันทึก Charge ลง Firebase
     const newOrder = {
@@ -56,10 +64,11 @@ app.post('/checkout', async (req, res) => {
     const docRef = await addDoc(collection(db, 'orders'), newOrder);
     console.log(`Order created with ID: ${docRef.id}`);
 
-    res.send({ charge, orderId: docRef.id });
+    // ส่งข้อมูลกลับไปในรูปแบบ JSON
+    return res.json({ charge, orderId: docRef.id, qrCodeUrl });
   } catch (error) {
     console.error('Error creating charge or saving to Firebase:', error);
-    res.status(500).send({ error: 'Failed to create charge or save order' });
+    res.status(500).json({ error: 'Failed to create charge or save order', details: error.message });
   }
 });
 
@@ -70,7 +79,7 @@ app.get('/payment-status/:chargeId', async (req, res) => {
   try {
     const charge = await omise.charges.retrieve(chargeId);
 
-    res.send({
+    res.json({
       id: charge.id,
       status: charge.status,
       amount: charge.amount,
@@ -82,7 +91,7 @@ app.get('/payment-status/:chargeId', async (req, res) => {
     console.log(`Charge ${chargeId} retrieved successfully`);
   } catch (error) {
     console.error('Error retrieving charge:', error);
-    res.status(500).send({ error: 'Failed to retrieve charge' });
+    res.status(500).json({ error: 'Failed to retrieve charge', details: error.message });
   }
 });
 
@@ -134,7 +143,7 @@ app.post('/webhook', async (req, res) => {
 
     console.log(`Processing charge.complete for chargeId: ${chargeId}`);
 
-    // เรียก /payment-status/:chargeId ก่อนอัปเดต Firebase
+    // ตรวจสอบสถานะอีกครั้ง
     try {
       const chargeDetails = await omise.charges.retrieve(chargeId);
 
