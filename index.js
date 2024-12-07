@@ -2,8 +2,6 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
-const { db, collection, addDoc } = require('./firebase');
-const webhookRoutes = require('./webhook');
 const Omise = require('omise')({
   publicKey: process.env.REACT_APP_PUBLIC_OMISE_KEY,
   secretKey: process.env.REACT_APP_SECRET_OMISE_KEY,
@@ -28,9 +26,6 @@ app.use(cors({
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true })); // For x-www-form-urlencoded
-
-// Use webhook route
-app.use('/webhook', webhookRoutes);
 
 // Endpoint: Checkout
 app.post('/checkout', async (req, res) => {
@@ -70,14 +65,11 @@ app.post('/checkout', async (req, res) => {
       return res.status(500).json({ error: 'Failed to retrieve QR Code URL' });
     }
 
-    const docRef = await addDoc(collection(db, 'orders'), newOrder);
-    console.log(`Order created with ID: ${docRef.id}`);
-
     // Send Response
-    return res.json({ charge, orderId: docRef.id, qrCodeUrl });
+    return res.json({ charge, qrCodeUrl });
   } catch (error) {
-    console.error('Error creating charge or saving to Firebase:', error);
-    res.status(500).json({ error: 'Failed to create charge or save order', details: error.message });
+    console.error('Error creating charge:', error);
+    res.status(500).json({ error: 'Failed to create charge', details: error.message });
   }
 });
 
