@@ -1,40 +1,34 @@
-// index.js
-
 const express = require('express');
 const bodyParser = require('body-parser');
-const cors = require('cors'); // สำหรับจัดการ CORS
+const cors = require('cors');
 const rateLimit = require('express-rate-limit');
+const { db, collection, addDoc } = require('./firebase');
 const webhookRoutes = require('./webhook'); // นำเข้า Webhook Routes
-const { db, collection, addDoc, updateDoc, query, where, doc, getDocs } = require('./firebase');
 const Omise = require('omise')({
-  publicKey: process.env.REACT_APP_PUBLIC_OMISE_KEY, 
-  secretKey: process.env.REACT_APP_SECRET_OMISE_KEY,
+  publicKey: 'YOUR_PUBLIC_OMISE_KEY', // Replace with your Omise Public Key
+  secretKey: 'YOUR_SECRET_OMISE_KEY', // Replace with your Omise Secret Key
 });
 
 const app = express();
 
-// ตั้งค่า Rate Limiting
+// Rate Limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 นาที
-  max: 100, // จำกัดแต่ละ IP ไม่เกิน 100 ครั้งต่อหน้าต่างเวลา
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
 });
 app.use(limiter);
 
-// ตั้งค่า CORS ให้อนุญาตเฉพาะ https://order.smobu.cloud
+// CORS Configuration
 app.use(cors({
-  origin: 'https://order.smobu.cloud', // อนุญาตเฉพาะโดเมนของคุณ
-  methods: ['GET', 'POST', 'OPTIONS'], // อนุญาตเฉพาะ Methods ที่ต้องการ
-  allowedHeaders: ['Content-Type'], // อนุญาตเฉพาะ Headers ที่จำเป็น
-  credentials: true, // อนุญาตการส่ง Cookies หรือ Credentials
+  origin: 'https://order.smobu.cloud',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+  credentials: true,
 }));
-
 
 app.use(bodyParser.json());
 
-// ใช้ Webhook Routes
-app.use('/webhook', webhookRoutes);
-
-// สร้าง PromptPay QR Code
+// Endpoint: Checkout
 app.post('/checkout', async (req, res) => {
   const { amount } = req.body;
 
@@ -43,7 +37,7 @@ app.post('/checkout', async (req, res) => {
   }
 
   try {
-    // สร้าง Source
+    // Create Omise Source
     const source = await Omise.sources.create({
       type: 'promptpay',
       amount: amount,
@@ -52,7 +46,7 @@ app.post('/checkout', async (req, res) => {
 
     console.log('Source created:', source);
 
-    // สร้าง Charge
+    // Create Omise Charge
     const charge = await Omise.charges.create({
       amount: amount,
       source: source.id,
@@ -61,15 +55,18 @@ app.post('/checkout', async (req, res) => {
 
     console.log('Charge created:', charge);
 
-    // ดึง URL ของ QR Code จาก Source แทน Charge
-    const qrCodeUrl = source.scannable_code?.image?.download_uri || null;
+    // Retrieve QR Code URL
+    const qrCodeUrl =
+      charge.source?.scannable_code?.image?.download_uri || // From Charge
+      source?.scannable_code?.image?.download_uri ||        // From Source
+      null;
 
     if (!qrCodeUrl) {
-      console.error('QR Code URL not found in source.');
+      console.error('QR Code URL not found in charge or source.');
       return res.status(500).json({ error: 'Failed to retrieve QR Code URL' });
     }
 
-    // บันทึก Charge ลง Firebase
+    // Save Order to Firebase
     const newOrder = {
       paymentChargeId: charge.id,
       amount: charge.amount,
@@ -81,7 +78,7 @@ app.post('/checkout', async (req, res) => {
     const docRef = await addDoc(collection(db, 'orders'), newOrder);
     console.log(`Order created with ID: ${docRef.id}`);
 
-    // ส่งข้อมูลกลับไปในรูปแบบ JSON
+    // Send Response
     return res.json({ charge, orderId: docRef.id, qrCodeUrl });
   } catch (error) {
     console.error('Error creating charge or saving to Firebase:', error);
@@ -89,7 +86,7 @@ app.post('/checkout', async (req, res) => {
   }
 });
 
-// ตรวจสอบสถานะการชำระเงิน
+// Endpoint: Payment Status
 app.get('/payment-status/:chargeId', async (req, res) => {
   const chargeId = req.params.chargeId;
 
@@ -112,7 +109,7 @@ app.get('/payment-status/:chargeId', async (req, res) => {
   }
 });
 
-// เริ่มเซิร์ฟเวอร์
+// Start Server
 const PORT = 5000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
