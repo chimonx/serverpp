@@ -1,6 +1,7 @@
 require('dotenv').config(); // โหลดค่าจากไฟล์ .env
 const express = require('express');
 const bodyParser = require('body-parser');
+const cors = require('cors'); // นำเข้า CORS
 const { db, collection, addDoc, updateDoc, query, where, doc, getDocs } = require('./firebase');
 
 // กำหนด Public และ Secret Key โดยดึงค่าจาก .env
@@ -10,6 +11,14 @@ const omise = require('omise')({
 });
 
 const app = express();
+
+// ตั้งค่า CORS ให้อนุญาตเฉพาะ https://order.smobu.cloud
+app.use(cors({
+  origin: 'https://order.smobu.cloud',
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type'],
+}));
+
 app.use(bodyParser.json());
 
 // สร้าง PromptPay QR Code
